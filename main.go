@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	b64 "encoding/base64"
 	csv "encoding/csv"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"os"
+	"strings"
 )
 
 type Account struct {
@@ -15,16 +19,20 @@ type Account struct {
 }
 
 const databasePath = "db.csv"
+const PORT = ":8001"
 
 func main() {
-	accounts, readErr := getDB()
-	fmt.Println(readErr)
-	fmt.Println(accounts)
-	writeErr := newAccount()
-	fmt.Println(writeErr)
-	accounts, readErr = getDB()
-	fmt.Println(readErr)
-	fmt.Println(accounts)
+	// accounts, readErr := getDB()
+	// fmt.Println(readErr)
+	// fmt.Println(accounts)
+	// writeErr := newAccount()
+	// fmt.Println(writeErr)
+	// accounts, readErr = getDB()
+	// fmt.Println(readErr)
+	// fmt.Println(accounts)
+
+	serve()
+	fmt.Println("Done serving")
 
 }
 
@@ -94,4 +102,50 @@ func writeDB(record []string) error {
 	writer.Flush()
 
 	return writingErr
+}
+
+func serve() {
+	l, err := net.Listen("tcp", PORT)
+	if err != nil {
+		log.Fatalf("Error starting server: %v", err)
+	}
+	defer l.Close()
+
+	fmt.Println("Serving on", PORT)
+
+	for {
+		c, err := l.Accept()
+		fmt.Println("Accepted connection")
+		if err != nil {
+			fmt.Println("Accept error:", err)
+			continue
+		}
+		go handleConnection(c)
+	}
+}
+
+func handleConnection(c net.Conn) {
+	defer c.Close()
+	fmt.Println("New connection from", c.RemoteAddr())
+
+	for {
+		netData, err := bufio.NewReader(c).ReadString('\n')
+		if err != nil {
+			log.Println("Connection closed or error:", err)
+			return
+		}
+
+		temp := strings.TrimSpace(netData)
+		if temp == "STOP" {
+			fmt.Println("Stopping connection with", c.RemoteAddr())
+			break
+		}
+
+		result := "Hello!\n"
+		_, err = c.Write([]byte(result))
+		if err != nil {
+			log.Println("Error writing to connection:", err)
+			return
+		}
+	}
 }
