@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
+	"os"
 )
 
 func main() {
@@ -10,6 +12,8 @@ func main() {
 }
 
 func sendData() {
+	scanner := bufio.NewReader(os.Stdin)
+
 	conn, connErr := net.Dial("tcp", "localhost:8001")
 	if connErr != nil {
 		fmt.Println(connErr)
@@ -19,13 +23,6 @@ func sendData() {
 	defer conn.Close()
 
 	for {
-		var message string
-		fmt.Print(">\t")
-		fmt.Scan(&message)
-		fmt.Println("|" + message + "|")
-
-		conn.Write([]byte(message + "\n"))
-
 		reply := make([]byte, 1024)
 		_, err := conn.Read(reply)
 		if err != nil {
@@ -33,7 +30,10 @@ func sendData() {
 			break
 		}
 		fmt.Println(string(reply))
+
+		message, _ := scanner.ReadString('\n')
+
+		conn.Write([]byte(message + "\n"))
 	}
 	fmt.Println("Goodbye")
-
 }

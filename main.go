@@ -18,6 +18,12 @@ type Account struct {
 	encrypted string
 }
 
+type Message struct {
+	content string
+	from    string
+	to      string
+}
+
 const databasePath = "db.csv"
 const PORT = ":8001"
 
@@ -120,13 +126,18 @@ func serve() {
 			fmt.Println("Accept error:", err)
 			continue
 		}
-		go handleConnection(c)
+		go handleMessageConnection(c)
 	}
 }
 
-func handleConnection(c net.Conn) {
+func handleMessageConnection(c net.Conn) {
 	defer c.Close()
 	fmt.Println("New connection from", c.RemoteAddr())
+
+	_, err := c.Write([]byte("Welcome!"))
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
@@ -141,8 +152,9 @@ func handleConnection(c net.Conn) {
 			break
 		}
 
-		result := "Hello!\n"
-		_, err = c.Write([]byte(result))
+		fmt.Println(temp)
+
+		_, err = c.Write([]byte(temp))
 		if err != nil {
 			log.Println("Error writing to connection:", err)
 			return
