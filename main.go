@@ -34,7 +34,7 @@ func (r *Room) broadcast(message string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, c := range r.channels {
-		c.Write([]byte(message))
+		c.Write([]byte(message + "\n"))
 	}
 }
 
@@ -42,6 +42,19 @@ func (r *Room) add(c net.Conn) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.channels = append(r.channels, c)
+}
+
+func (r *Room) remove(c net.Conn) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i, v := range r.channels {
+		if v == c {
+			r.channels[i] = r.channels[len(r.channels)-1]
+			r.channels = r.channels[:len(r.channels)-1]
+			return
+		}
+	}
 }
 
 func (r *Room) printMembers() {
@@ -171,6 +184,7 @@ func serve() {
 
 func handleMessageConnection(c net.Conn, r *Room) {
 	defer c.Close()
+	defer r.remove(c)
 
 	fmt.Println("New connection from", c.RemoteAddr())
 

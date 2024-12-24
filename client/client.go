@@ -9,6 +9,7 @@ import (
 
 func main() {
 	sendData()
+	fmt.Println("Goodbye!")
 }
 
 func sendData() {
@@ -21,19 +22,24 @@ func sendData() {
 	}
 
 	defer conn.Close()
-
+	go func() {
+		for {
+			reply := make([]byte, 1024)
+			_, err := conn.Read(reply)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Println(string(reply))
+		}
+	}()
 	for {
-		reply := make([]byte, 1024)
-		_, err := conn.Read(reply)
-		if err != nil {
-			fmt.Println(err)
+		message, _ := scanner.ReadString('\n')
+
+		if message == "STOP" {
 			break
 		}
-		fmt.Println(string(reply))
-
-		message, _ := scanner.ReadString('\n')
 
 		conn.Write([]byte(message + "\n"))
 	}
-	fmt.Println("Goodbye")
 }
