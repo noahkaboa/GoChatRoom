@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 )
 
 type Account struct {
@@ -22,6 +23,33 @@ type Message struct {
 	content string
 	from    string
 	to      string
+}
+
+type Room struct {
+	mu       sync.Mutex
+	channels []net.Conn
+}
+
+func (r *Room) broadcast(message string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, c := range r.channels {
+		c.Write([]byte(message))
+	}
+}
+
+func (r *Room) add(c net.Conn) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.channels = append(r.channels, c)
+}
+
+func (r *Room) printMembers() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, c := range r.channels {
+		fmt.Println(c.RemoteAddr().String())
+	}
 }
 
 const databasePath = "db.csv"
@@ -111,7 +139,12 @@ func writeDB(record []string) error {
 }
 
 func serve() {
+	mainRoom := Room{
+
+		channels: []net.Conn{},
+	}
 	l, err := net.Listen("tcp", PORT)
+
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
@@ -122,22 +155,26 @@ func serve() {
 	for {
 		c, err := l.Accept()
 		fmt.Println("Accepted connection")
+		mainRoom.add(c)
+		fmt.Println("Added connection to mainroom")
+
+		fmt.Println("Current room status:")
+		mainRoom.printMembers()
+
 		if err != nil {
 			fmt.Println("Accept error:", err)
 			continue
 		}
-		go handleMessageConnection(c)
+		go handleMessageConnection(c, &mainRoom)
 	}
 }
 
-func handleMessageConnection(c net.Conn) {
+func handleMessageConnection(c net.Conn, r *Room) {
 	defer c.Close()
+
 	fmt.Println("New connection from", c.RemoteAddr())
 
-	_, err := c.Write([]byte("Welcome!"))
-	if err != nil {
-		fmt.Println(err)
-	}
+	r.broadcast("Welcome!" + c.RemoteAddr().String())
 
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
@@ -154,10 +191,6 @@ func handleMessageConnection(c net.Conn) {
 
 		fmt.Println(temp)
 
-		_, err = c.Write([]byte(temp))
-		if err != nil {
-			log.Println("Error writing to connection:", err)
-			return
-		}
+		r.broadcast(temp)
 	}
 }
