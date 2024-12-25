@@ -20,15 +20,22 @@ type Account struct {
 }
 
 type Message struct {
-	content string
-	from    string
-	to      string
+	content  string
+	from     string
+	roomName string
 }
 
 type Room struct {
 	mu       sync.Mutex
 	channels []net.Conn
 }
+
+type Server struct {
+	mu    sync.Mutex
+	rooms map[string]Room
+}
+
+var globalServer Server
 
 func (r *Room) broadcast(message string) {
 	r.mu.Lock()
@@ -63,6 +70,25 @@ func (r *Room) printMembers() {
 	for _, c := range r.channels {
 		fmt.Println(c.RemoteAddr().String())
 	}
+}
+
+func (s *Server) addRoom(roomName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rooms[roomName] = Room{}
+}
+
+func (s *Server) removeRoom(roomName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.rooms, roomName)
+}
+
+func (s *Server) listRooms() (r []string) {
+	for k, _ := range s.rooms {
+		r = append(r, k)
+	}
+	return
 }
 
 const databasePath = "db.csv"
@@ -185,10 +211,11 @@ func serve() {
 func handleMessageConnection(c net.Conn, r *Room) {
 	defer c.Close()
 	defer r.remove(c)
+	defer r.broadcast(c.RemoteAddr().String() + " has left the room")
 
 	fmt.Println("New connection from", c.RemoteAddr())
 
-	r.broadcast("Welcome!" + c.RemoteAddr().String())
+	r.broadcast("Welcome! " + c.RemoteAddr().String())
 
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
@@ -207,4 +234,16 @@ func handleMessageConnection(c net.Conn, r *Room) {
 
 		r.broadcast(temp)
 	}
+}
+
+func receive(netData string) (m Message, err error) {
+
+	bytes := []byte(netData)
+
+	m.roomName = string(bytes[:64])
+	m.from = string(bytes[64:128])
+	m.content = string(bytes[128:256])
+
+	return m, nil
+
 }
