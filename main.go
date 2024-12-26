@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	b64 "encoding/base64"
 	csv "encoding/csv"
@@ -10,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -203,11 +203,11 @@ func serve() {
 			fmt.Println("Accept error:", err)
 			continue
 		}
-		go handleMessageConnection(c, &mainRoom)
+		go handleConnection(c, &mainRoom)
 	}
 }
 
-func handleMessageConnection(c net.Conn, r *Room) {
+func handleConnection(c net.Conn, r *Room) {
 	defer c.Close()
 	defer r.remove(c)
 	defer r.broadcast(c.RemoteAddr().String() + " has left the room")
@@ -217,41 +217,37 @@ func handleMessageConnection(c net.Conn, r *Room) {
 	r.broadcast("Welcome! " + c.RemoteAddr().String())
 
 	for {
-		netDataBytes, err := bufio.NewReader(c).ReadBytes('\n')
+		netDataBytes := make([]byte, 256)
+		_, err := c.Read(netDataBytes)
 		if err != nil {
 			log.Println("Connection closed or error:", err)
 			return
 		}
-		netData := string(netDataBytes)
-
-		fmt.Println(netData)
-
 		tempMessage := receive(netDataBytes)
 		if tempMessage.intent == "STOP" {
 			fmt.Println("Stopping connection with", c.RemoteAddr())
 			break
+		} else if tempMessage.intent == "message" {
+			fmt.Println("room:\t" + tempMessage.roomName)
+			fmt.Println("from:\t" + tempMessage.from)
+			fmt.Println("message:\t" + tempMessage.content)
+			r.broadcast(tempMessage.content)
+		} else {
+			fmt.Printf("%+v\n", tempMessage)
 		}
 
-		fmt.Println(tempMessage.content)
-
-		r.broadcast(tempMessage.content)
 	}
 }
 
 func receive(bytesData []byte) (m Message) {
-	fmt.Println(bytesData)
-	fmt.Println(len(bytesData))
-
 	m.roomName = string(trimPadding(bytesData[:32], 32))
 	m.intent = string(trimPadding(bytesData[32:64], 32))
 	m.from = string(trimPadding(bytesData[64:128], 64))
 	m.content = string(trimPadding(bytesData[128:256], 128))
 
-	fmt.Printf("%+v\n", m)
-
 	return m
 }
 
 func trimPadding(bytesData []byte, size int) []byte {
-	return bytesData[len(bytesData)-size:]
+	return []byte(strings.TrimLeft(string(bytesData[len(bytesData)-size:]), " "))
 }
