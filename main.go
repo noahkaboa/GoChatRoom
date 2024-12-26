@@ -10,7 +10,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 	"sync"
 )
 
@@ -23,6 +22,7 @@ type Message struct {
 	content  string
 	from     string
 	roomName string
+	intent   string
 }
 
 type Room struct {
@@ -179,7 +179,6 @@ func writeDB(record []string) error {
 
 func serve() {
 	mainRoom := Room{
-
 		channels: []net.Conn{},
 	}
 	l, err := net.Listen("tcp", PORT)
@@ -218,32 +217,41 @@ func handleMessageConnection(c net.Conn, r *Room) {
 	r.broadcast("Welcome! " + c.RemoteAddr().String())
 
 	for {
-		netData, err := bufio.NewReader(c).ReadString('\n')
+		netDataBytes, err := bufio.NewReader(c).ReadBytes('\n')
 		if err != nil {
 			log.Println("Connection closed or error:", err)
 			return
 		}
+		netData := string(netDataBytes)
 
-		temp := strings.TrimSpace(netData)
-		if temp == "STOP" {
+		fmt.Println(netData)
+
+		tempMessage := receive(netDataBytes)
+		if tempMessage.intent == "STOP" {
 			fmt.Println("Stopping connection with", c.RemoteAddr())
 			break
 		}
 
-		fmt.Println(temp)
+		fmt.Println(tempMessage.content)
 
-		r.broadcast(temp)
+		r.broadcast(tempMessage.content)
 	}
 }
 
-func receive(netData string) (m Message, err error) {
+func receive(bytesData []byte) (m Message) {
+	fmt.Println(bytesData)
+	fmt.Println(len(bytesData))
 
-	bytes := []byte(netData)
+	m.roomName = string(trimPadding(bytesData[:32], 32))
+	m.intent = string(trimPadding(bytesData[32:64], 32))
+	m.from = string(trimPadding(bytesData[64:128], 64))
+	m.content = string(trimPadding(bytesData[128:256], 128))
 
-	m.roomName = string(bytes[:64])
-	m.from = string(bytes[64:128])
-	m.content = string(bytes[128:256])
+	fmt.Printf("%+v\n", m)
 
-	return m, nil
+	return m
+}
 
+func trimPadding(bytesData []byte, size int) []byte {
+	return bytesData[len(bytesData)-size:]
 }
