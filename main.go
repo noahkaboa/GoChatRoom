@@ -9,8 +9,8 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 	"sync"
+	"unicode"
 )
 
 type Account struct {
@@ -233,21 +233,28 @@ func handleConnection(c net.Conn, r *Room) {
 			fmt.Println("message:\t" + tempMessage.content)
 			r.broadcast(tempMessage.content)
 		} else {
-			fmt.Printf("%+v\n", tempMessage)
+			// fmt.Printf("%+v\n", tempMessage)
 		}
 
 	}
 }
 
 func receive(bytesData []byte) (m Message) {
-	m.roomName = string(trimPadding(bytesData[:32], 32))
-	m.intent = string(trimPadding(bytesData[32:64], 32))
-	m.from = string(trimPadding(bytesData[64:128], 64))
-	m.content = string(trimPadding(bytesData[128:256], 128))
+	m.roomName = trimPadding(bytesData[:32])
+	m.intent = trimPadding(bytesData[32:64])
+	m.from = trimPadding(bytesData[64:128])
+	m.content = trimPadding(bytesData[128:256])
+
+	fmt.Println(m)
 
 	return m
 }
 
-func trimPadding(bytesData []byte, size int) []byte {
-	return []byte(strings.TrimLeft(string(bytesData[len(bytesData)-size:]), " "))
+func trimPadding(bytesData []byte) string {
+	i := 0
+	for i < len(bytesData) && (bytesData[i] == 0 || unicode.IsSpace(rune(bytesData[i]))) {
+		i++
+	}
+
+	return string(bytesData[i:])
 }
