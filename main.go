@@ -35,8 +35,6 @@ type Server struct {
 	rooms map[string]Room
 }
 
-var globalServer Server
-
 func (r *Room) broadcast(message string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -72,7 +70,7 @@ func (r *Room) printMembers() {
 	}
 }
 
-func (s *Server) addRoom(roomName string) {
+func (s *Server) addNewRoom(roomName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rooms[roomName] = Room{}
@@ -91,6 +89,10 @@ func (s *Server) listRooms() (r []string) {
 	return
 }
 
+var globalServer Server = Server{
+	rooms: make(map[string]Room),
+}
+
 const databasePath = "db.csv"
 const PORT = ":8001"
 
@@ -103,6 +105,8 @@ func main() {
 	// accounts, readErr = getDB()
 	// fmt.Println(readErr)
 	// fmt.Println(accounts)
+
+	globalServer.addNewRoom("main")
 
 	serve()
 	fmt.Println("Done serving")
@@ -178,9 +182,8 @@ func writeDB(record []string) error {
 }
 
 func serve() {
-	mainRoom := Room{
-		channels: []net.Conn{},
-	}
+	mainRoom := globalServer.rooms["main"]
+
 	l, err := net.Listen("tcp", PORT)
 
 	if err != nil {
@@ -216,24 +219,26 @@ func handleConnection(c net.Conn, r *Room) {
 
 	r.broadcast("Welcome! " + c.RemoteAddr().String())
 
-	for {
+	for loop := true; loop; {
 		netDataBytes := make([]byte, 256)
 		_, err := c.Read(netDataBytes)
 		if err != nil {
 			log.Println("Connection closed or error:", err)
 			return
 		}
-		tempMessage := receive(netDataBytes)
-		if tempMessage.intent == "STOP" {
+
+		switch tempMessage := receive(netDataBytes); tempMessage.intent {
+		case "STOP":
 			fmt.Println("Stopping connection with", c.RemoteAddr())
-			break
-		} else if tempMessage.intent == "message" {
+			loop = false
+		case "message":
 			fmt.Println("room:\t" + tempMessage.roomName)
 			fmt.Println("from:\t" + tempMessage.from)
 			fmt.Println("message:\t" + tempMessage.content)
 			r.broadcast(tempMessage.content)
-		} else {
-			// fmt.Printf("%+v\n", tempMessage)
+		case "new_room":
+		default:
+			fmt.Printf("%+v\n", tempMessage)
 		}
 
 	}
